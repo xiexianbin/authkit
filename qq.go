@@ -35,12 +35,11 @@ import (
 type QQProvider struct {
 	Name   string
 	config *oauth2.Config
-	name   string
 }
 
 func NewQQProvider(cfg *OauthConfig) Provider {
 	return &QQProvider{
-		name: QQ,
+		Name: QQ,
 		config: &oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,
@@ -176,7 +175,7 @@ func (p *QQProvider) GetUserInfo(token *oauth2.Token) (*UserInfo, error) {
 	}
 
 	return &UserInfo{
-		Provider:       p.name,
+		Provider:       p.Name,
 		ProviderUserID: providerUserID,
 		Name:           qqUser.Nickname,
 		AvatarURL:      qqUser.Avatar,

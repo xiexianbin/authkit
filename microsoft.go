@@ -30,6 +30,7 @@ type MicrosoftProvider struct {
 
 func NewMicrosoftProvider(cfg *OauthConfig) Provider {
 	return &MicrosoftProvider{
+		Name: MICROSOFT,
 		config: &oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,

@@ -24,6 +24,7 @@ import (
 	"golang.org/x/oauth2/github"
 )
 
+// GithubProvider https://github.com/login/oauth/.well-known/openid-configuration
 type GithubProvider struct {
 	Name   string
 	config *oauth2.Config
@@ -32,6 +33,7 @@ type GithubProvider struct {
 // NewGithubProvider 创建一个新的 GitHub Provider实例
 func NewGithubProvider(cfg *OauthConfig) Provider {
 	return &GithubProvider{
+		Name: GITHUB,
 		config: &oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,

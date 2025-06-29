@@ -33,6 +33,7 @@ type FacebookProvider struct {
 
 func NewFacebookProvider(cfg *OauthConfig) Provider {
 	return &FacebookProvider{
+		Name: FACEBOOK,
 		config: &oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,
