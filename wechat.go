@@ -39,6 +39,7 @@ type WechatProvider struct {
 // NewWechatProvider 创建一个新的微信Provider实例
 func NewWechatProvider(cfg *OauthConfig) Provider {
 	return &WechatProvider{
+		Name: WECHAT,
 		config: &oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,

@@ -23,6 +23,7 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
+// GoogleProvider https://accounts.google.com/.well-known/openid-configuration
 type GoogleProvider struct {
 	Name   string
 	config *oauth2.Config
@@ -30,6 +31,7 @@ type GoogleProvider struct {
 
 func NewGoogleProvider(cfg *OauthConfig) Provider {
 	return &GoogleProvider{
+		Name: GOOGLE,
 		config: &oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,

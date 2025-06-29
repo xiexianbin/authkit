@@ -15,9 +15,9 @@ A golang implementation that supports multiple third-party OAuth (e.g., GitHub, 
 - ~~DingTalk~~
 - Facebook
 - ~~Feishu / Lark~~
-- Github
-- Google
+- [x] [Github](https://github.com/settings/developers)
+- [x] [Google](https://console.cloud.google.com/auth/clients/create)
 - Microsoft Account
-- QQ
+- [QQ](https://connect.qq.com/)
 - Twitter (X)
-- WeChat
+- [WeChat](https://open.weixin.qq.com/)([ref](https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/login.html))

@@ -15,28 +15,29 @@
 package authkit
 
 // OauthConfig defines the universal configuration for an OAuth provider.
+// envconfig is tag for [https://github.com/kelseyhightower/envconfig]
 type OauthConfig struct {
-	ClientID     string `mapstructure:"client_id"`
-	ClientSecret string `mapstructure:"client_secret"`
-	RedirectURL  string `mapstructure:"redirect_url"`
+	ClientID     string `envconfig:"CLIENT_ID"`
+	ClientSecret string `envconfig:"CLIENT_SECRET"`
+	RedirectURL  string `envconfig:"REDIRECT_URL"`
 
 	// Extra oauth config
 	//
 	// - Apple-specific fields: `TeamID` `KeyID` and `AppPrivateKey`(The content of your .p8 private key file for Apple)
 	//
 	// - 支付宝可能需要额外字段： `AppPrivateKey`
-	Extra map[string]any `json:"extra,omitempty"`
+	Extra map[string]any
 }
 
 // Config is the main application configuration.
 type Config struct {
-	Alipay    OauthConfig `mapstructure:"alipay"`
-	Apple     OauthConfig `mapstructure:"apple"`
-	Facebook  OauthConfig `mapstructure:"facebook"`
-	Github    OauthConfig `mapstructure:"github"`
-	Google    OauthConfig `mapstructure:"google"`
-	Microsoft OauthConfig `mapstructure:"microsoft"`
-	QQ        OauthConfig `mapstructure:"qq"`
-	Twitter   OauthConfig `mapstructure:"twitter"`
-	Wechat    OauthConfig `mapstructure:"wechat"`
+	Alipay    OauthConfig
+	Apple     OauthConfig
+	Facebook  OauthConfig
+	Github    OauthConfig
+	Google    OauthConfig
+	Microsoft OauthConfig
+	QQ        OauthConfig
+	Twitter   OauthConfig
+	Wechat    OauthConfig
 }

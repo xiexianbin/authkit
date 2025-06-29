@@ -44,6 +44,7 @@ type TwitterProvider struct {
 
 func NewTwitterProvider(cfg *OauthConfig) Provider {
 	return &TwitterProvider{
+		Name: TWITTER,
 		config: &oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,
