@@ -16,58 +16,64 @@ package authkit
 
 import (
 	"fmt"
+
+	"go.xiexianbin.cn/authkit/providers"
+	"go.xiexianbin.cn/authkit/types"
 )
 
-var (
-	ALIPAY    = "alipay"
-	APPLE     = "apple"
-	FACEBOOK  = "facebook"
-	GITHUB    = "github"
-	GOOGLE    = "google"
-	MICROSOFT = "microsoft"
-	QQ        = "qq"
-	TWITTER   = "twitter"
-	WECHAT    = "wechat"
-)
-
-var providers = make(map[string]Provider)
+var registry = make(map[string]types.Provider)
 
 // InitFactory init all OAuth Provider
-func InitFactory(cfg *Config) {
+func InitFactory(cfg *types.Config) {
 	if cfg.Alipay.ClientID != "" {
-		providers[ALIPAY] = NewAlipayProvider(&cfg.Alipay)
+		registry[types.ALIPAY] = providers.NewAlipayProvider(&cfg.Alipay)
 	}
 	if cfg.Apple.ClientID != "" {
-		providers[APPLE] = NewAppleProvider(&cfg.Apple)
+		registry[types.APPLE] = providers.NewAppleProvider(&cfg.Apple)
+	}
+	if cfg.Dingtalk.ClientID != "" {
+		registry[types.DINGTALK] = providers.NewDingtalkProvider(&cfg.Dingtalk)
 	}
 	if cfg.Facebook.ClientID != "" {
-		providers[FACEBOOK] = NewFacebookProvider(&cfg.Facebook)
+		registry[types.FACEBOOK] = providers.NewFacebookProvider(&cfg.Facebook)
+	}
+	if cfg.Feishu.ClientID != "" {
+		registry[types.FEISHU] = providers.NewFeishuProvider(&cfg.Feishu)
 	}
 	if cfg.Github.ClientID != "" {
-		providers[GITHUB] = NewGithubProvider(&cfg.Github)
+		registry[types.GITHUB] = providers.NewGithubProvider(&cfg.Github)
 	}
 	if cfg.Google.ClientID != "" {
-		providers[GOOGLE] = NewGoogleProvider(&cfg.Google)
+		registry[types.GOOGLE] = providers.NewGoogleProvider(&cfg.Google)
 	}
 	if cfg.Microsoft.ClientID != "" {
-		providers[MICROSOFT] = NewMicrosoftProvider(&cfg.Microsoft)
+		registry[types.MICROSOFT] = providers.NewMicrosoftProvider(&cfg.Microsoft)
 	}
 	if cfg.QQ.ClientID != "" {
-		providers[QQ] = NewQQProvider(&cfg.QQ)
+		registry[types.QQ] = providers.NewQQProvider(&cfg.QQ)
 	}
 	if cfg.Twitter.ClientID != "" {
-		providers[TWITTER] = NewTwitterProvider(&cfg.Twitter)
+		registry[types.TWITTER] = providers.NewTwitterProvider(&cfg.Twitter)
 	}
 	if cfg.Wechat.ClientID != "" {
-		providers[WECHAT] = NewWechatProvider(&cfg.Wechat)
+		registry[types.WECHAT] = providers.NewWechatProvider(&cfg.Wechat)
 	}
 }
 
 // GetProvider get an OAuth Provider instance by name
-func GetProvider(name string) (Provider, error) {
-	provider, ok := providers[name]
+func GetProvider(name string) (types.Provider, error) {
+	provider, ok := registry[name]
 	if !ok {
 		return nil, fmt.Errorf("provider %s not supported", name)
 	}
 	return provider, nil
+}
+
+// GetProviders returns a list of registered provider names
+func GetProviders() []string {
+	var names []string
+	for k := range registry {
+		names = append(names, k)
+	}
+	return names
 }
