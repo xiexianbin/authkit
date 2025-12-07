@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package authkit
+package types
 
 // OauthConfig defines the universal configuration for an OAuth provider.
 // envconfig is tag for [https://github.com/kelseyhightower/envconfig]
@@ -33,7 +33,9 @@ type OauthConfig struct {
 type Config struct {
 	Alipay    OauthConfig
 	Apple     OauthConfig
+	Dingtalk  OauthConfig
 	Facebook  OauthConfig
+	Feishu    OauthConfig
 	Github    OauthConfig
 	Google    OauthConfig
 	Microsoft OauthConfig

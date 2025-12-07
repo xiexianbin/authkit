@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package authkit
+package providers
 
 import (
 	"context"
@@ -21,6 +21,8 @@ import (
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/microsoft"
+
+	"go.xiexianbin.cn/authkit/types"
 )
 
 type MicrosoftProvider struct {
@@ -28,9 +30,9 @@ type MicrosoftProvider struct {
 	config *oauth2.Config
 }
 
-func NewMicrosoftProvider(cfg *OauthConfig) Provider {
+func NewMicrosoftProvider(cfg *types.OauthConfig) types.Provider {
 	return &MicrosoftProvider{
-		Name: MICROSOFT,
+		Name: types.MICROSOFT,
 		config: &oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,
@@ -41,16 +43,16 @@ func NewMicrosoftProvider(cfg *OauthConfig) Provider {
 	}
 }
 
-func (p *MicrosoftProvider) GetAuthURL(state string) string {
-	return p.config.AuthCodeURL(state)
+func (p *MicrosoftProvider) GetAuthURL(state string, opts ...oauth2.AuthCodeOption) string {
+	return p.config.AuthCodeURL(state, opts...)
 }
 
-func (p *MicrosoftProvider) ExchangeCodeForToken(code string) (*oauth2.Token, error) {
-	return p.config.Exchange(context.Background(), code)
+func (p *MicrosoftProvider) ExchangeCodeForToken(ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
+	return p.config.Exchange(ctx, code, opts...)
 }
 
-func (p *MicrosoftProvider) GetUserInfo(token *oauth2.Token) (*UserInfo, error) {
-	client := p.config.Client(context.Background(), token)
+func (p *MicrosoftProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*types.UserInfo, error) {
+	client := p.config.Client(ctx, token)
 	userInfoURL := "https://graph.microsoft.com/v1.0/me"
 
 	resp, err := client.Get(userInfoURL)
@@ -74,7 +76,7 @@ func (p *MicrosoftProvider) GetUserInfo(token *oauth2.Token) (*UserInfo, error) 
 		return nil, err
 	}
 
-	return &UserInfo{
+	return &types.UserInfo{
 		Provider:       "microsoft",
 		ProviderUserID: msUser.ID,
 		Name:           msUser.DisplayName,

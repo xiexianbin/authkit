@@ -4,25 +4,25 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/license/apache-2-0)
 [![Go.Dev reference](https://pkg.go.dev/badge/go.xiexianbin.cn/authkit?utm_source=godoc)](https://pkg.go.dev/go.xiexianbin.cn/authkit)
 
-[中文文档](README_zh-CN.md)
+[English Documentation](README.md)
 
-A Golang implementation that supports multiple third-party OAuth (e.g., GitHub, Google) logins and obtains user information.
+一个支持多种第三方 OAuth（如 GitHub, Google）登录和获取用户信息的 golang 实现。
 
-## Features
+## 特性
 
-- **Simplifies OAuth2/OpenID Connect**: Provides a unified interface for various providers.
-- **Extensible**: Easy to add new providers.
-- **Standardized User Info**: normalized user information structure across providers.
+- **简化 OAuth2/OpenID Connect**: 为各种提供商提供统一的接口。
+- **可扩展**: 易于添加新的提供商。
+- **标准化用户信息**: 跨提供商规范化用户信息结构。
 
-## Installation
+## 安装
 
 ```bash
 go get go.xiexianbin.cn/authkit
 ```
 
-## Usage
+## 使用方法
 
-Here is a simple example using Gin:
+这是一个使用 Gin 的简单示例：
 
 ```go
 package main
@@ -36,9 +36,9 @@ import (
 )
 
 func init() {
-	// Initialize with configuration based on environment variables or config file
+	// 使用环境变量或配置文件初始化配置
 	config := &types.Config{
-		// ... load headers mapstructure or similar
+		// ... 加载 headers mapstructure 等配置
 	}
 	authkit.InitFactory(config)
 }
@@ -46,7 +46,7 @@ func init() {
 func main() {
 	r := gin.Default()
 
-	// Redirect to provider login page
+	// 重定向到提供商登录页面
 	r.GET("/oauth/:provider/login", func(c *gin.Context) {
 		providerName := c.Param("provider")
 		provider, err := authkit.GetProvider(providerName)
@@ -55,13 +55,13 @@ func main() {
 			return
 		}
 
-		// In production, use a random state for CSRF protection
+		// 在生产环境中，应使用随机 state 进行 CSRF 保护
 		state := "random_state_string"
 		redirectURL := provider.GetAuthURL(state)
 		c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 	})
 
-	// Handle callback from provider
+	// 处理提供商回调
 	r.GET("/oauth/:provider/callback", func(c *gin.Context) {
 		providerName := c.Param("provider")
 		provider, err := authkit.GetProvider(providerName)
@@ -71,14 +71,14 @@ func main() {
 		}
 
 		code := c.Query("code")
-		// Exchange code for token
+		// 用 code 换取 token
 		token, err := provider.ExchangeCodeForToken(c.Request.Context(), code)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
-		// Get user info
+		//获取用户信息
 		userInfo, err := provider.GetUserInfo(c.Request.Context(), token)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -92,7 +92,7 @@ func main() {
 }
 ```
 
-## Supported Providers
+## 支持的提供商
 
 - Alipay
 - Apple ID
@@ -104,8 +104,8 @@ func main() {
 - Microsoft Account
 - [QQ](https://connect.qq.com/)
 - Twitter (X)
-- [WeChat](https://open.weixin.qq.com/) ([ref](https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/login.html))
+- [WeChat](https://open.weixin.qq.com/) ([参考](https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/login.html))
 
-## License
+## 许可证
 
-This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
+本项目采用 Apache 2.0 许可证 - 详情请参阅 [LICENSE](LICENSE) 文件。

@@ -12,24 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package authkit
+package types
 
-import "golang.org/x/oauth2"
-
-// UserInfo defines a standardized structure of user information
-// obtained from any OAuth Provider
-type UserInfo struct {
-	Provider       string
-	ProviderUserID string
-	Email          string
-	Name           string
-	AvatarURL      string
-	RawData        any
-}
-
-// Provider is a mandatory interface for all OAuth implementations
-type Provider interface {
-	GetAuthURL(state string) string
-	ExchangeCodeForToken(code string) (*oauth2.Token, error)
-	GetUserInfo(token *oauth2.Token) (*UserInfo, error)
-}
+const (
+	ALIPAY    = "alipay"
+	APPLE     = "apple"
+	DINGTALK  = "dingtalk"
+	FACEBOOK  = "facebook"
+	FEISHU    = "feishu"
+	GITHUB    = "github"
+	GOOGLE    = "google"
+	MICROSOFT = "microsoft"
+	QQ        = "qq"
+	TWITTER   = "twitter"
+	WECHAT    = "wechat"
+)

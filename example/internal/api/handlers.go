@@ -1,3 +1,17 @@
+// Copyright 2025 xiexianbin<me@xiexianbin.cn>
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package api
 
 import (
@@ -9,6 +23,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	"go.xiexianbin.cn/authkit"
+	"go.xiexianbin.cn/authkit/types"
 
 	"example/internal/services"
 	"example/utils"
@@ -21,7 +36,7 @@ func init() {
 		log.Fatal("Error loading .env file")
 	}
 
-	config := authkit.Config{}
+	config := types.Config{}
 	err = envconfig.Process("", &config)
 	if err != nil {
 		log.Fatal(err.Error())
@@ -44,7 +59,7 @@ func (h *AuthHandler) Home(c *gin.Context) {
 <body>
 	<h1>Welcome to AuthKit Example</h1>`
 
-	for _, name := range authkit.GetProvides() {
+	for _, name := range authkit.GetProviders() {
 		html += fmt.Sprintf("<a href=\"http://127.0.0.1:8080/api/v1/oauth/%s/login\">Login with %s</a><br/>", name, name)
 	}
 
@@ -89,13 +104,13 @@ func (h *AuthHandler) HandleOauthCallback(c *gin.Context) {
 	}
 
 	code := c.Query("code")
-	token, err := provider.ExchangeCodeForToken(code)
+	token, err := provider.ExchangeCodeForToken(c.Request.Context(), code)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to exchange token: " + err.Error()})
 		return
 	}
 
-	userInfo, err := provider.GetUserInfo(token)
+	userInfo, err := provider.GetUserInfo(c.Request.Context(), token)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user info: " + err.Error()})
 		return

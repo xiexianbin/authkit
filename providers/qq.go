@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package authkit
+package providers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,6 +24,8 @@ import (
 	"strings"
 
 	"golang.org/x/oauth2"
+
+	"go.xiexianbin.cn/authkit/types"
 )
 
 // QQ 的流程也有些非标准，尤其是在获取 `openid` 的步骤。
@@ -37,9 +40,9 @@ type QQProvider struct {
 	config *oauth2.Config
 }
 
-func NewQQProvider(cfg *OauthConfig) Provider {
+func NewQQProvider(cfg *types.OauthConfig) types.Provider {
 	return &QQProvider{
-		Name: QQ,
+		Name: types.QQ,
 		config: &oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,
@@ -53,14 +56,16 @@ func NewQQProvider(cfg *OauthConfig) Provider {
 	}
 }
 
-func (p *QQProvider) GetAuthURL(state string) string {
-	// QQ 需要 response_type=code
-	return p.config.AuthCodeURL(state, oauth2.SetAuthURLParam("response_type", "code"))
+func (p *QQProvider) GetAuthURL(state string, opts ...oauth2.AuthCodeOption) string {
+	return p.config.AuthCodeURL(state, opts...)
 }
 
-func (p *QQProvider) ExchangeCodeForToken(code string) (*oauth2.Token, error) {
+func (p *QQProvider) ExchangeCodeForToken(ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
 	// QQ 的 token 返回是 text/plain, 类似 access_token=...&expires_in=...
 	// 标准库的 Exchange 会失败，需要手动请求
+	// The standard oauth2.Config.Exchange method expects a JSON response.
+	// QQ's token endpoint returns a URL-encoded string.
+	// Therefore, we need to manually perform the exchange for QQ.
 	tokenURL := fmt.Sprintf(
 		"%s?grant_type=authorization_code&client_id=%s&client_secret=%s&code=%s&redirect_uri=%s",
 		p.config.Endpoint.TokenURL,
@@ -129,7 +134,7 @@ func (p *QQProvider) getOpenID(accessToken string) (string, string, error) {
 	return data.OpenID, data.UnionID, nil
 }
 
-func (p *QQProvider) GetUserInfo(token *oauth2.Token) (*UserInfo, error) {
+func (p *QQProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*types.UserInfo, error) {
 	openid, unionid, err := p.getOpenID(token.AccessToken)
 	if err != nil {
 		return nil, err
@@ -174,7 +179,7 @@ func (p *QQProvider) GetUserInfo(token *oauth2.Token) (*UserInfo, error) {
 		providerUserID = openid
 	}
 
-	return &UserInfo{
+	return &types.UserInfo{
 		Provider:       p.Name,
 		ProviderUserID: providerUserID,
 		Name:           qqUser.Nickname,

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package authkit
+package providers
 
 import (
 	"context"
@@ -25,22 +25,19 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/oauth2"
-)
 
-// It requires generating a JWT `client_secret` on the fly. User info is
-// contained within the `id_token` returned during the token exchange.
-// **CRITICAL NOTE**: Apple only provides user information (`name`, `email`)
-// on the **very first** authorization. Your application MUST capture and
-// save it then. Subsequent logins will not include this data.
+	"go.xiexianbin.cn/authkit/types"
+)
 
 type AppleProvider struct {
 	Name        string
-	config      *OauthConfig
+	config      *types.OauthConfig
 	oauthConfig *oauth2.Config
 }
 
-func NewAppleProvider(cfg *OauthConfig) Provider {
+func NewAppleProvider(cfg *types.OauthConfig) types.Provider {
 	return &AppleProvider{
+		Name:   types.APPLE,
 		config: cfg,
 		oauthConfig: &oauth2.Config{
 			ClientID:    cfg.ClientID,
@@ -54,21 +51,26 @@ func NewAppleProvider(cfg *OauthConfig) Provider {
 	}
 }
 
-// GetAuthURL for Apple requires response_mode=form_post
-func (p *AppleProvider) GetAuthURL(state string) string {
-	return p.oauthConfig.AuthCodeURL(state, oauth2.SetAuthURLParam("response_mode", "form_post"))
+func (p *AppleProvider) GetAuthURL(state string, opts ...oauth2.AuthCodeOption) string {
+	authOpts := append(opts, oauth2.SetAuthURLParam("response_mode", "form_post"))
+	return p.oauthConfig.AuthCodeURL(state, authOpts...)
 }
 
-// generateAppleClientSecret creates a JWT to be used as the client_secret
 func (p *AppleProvider) generateAppleClientSecret() (string, error) {
-	privateKeyBytes := []byte(p.config.Extra["AppPrivateKey"].(string))
-	privateKey, err := jwt.ParseECPrivateKeyFromPEM(privateKeyBytes)
+	keyContent, ok := p.config.Extra["AppPrivateKey"].(string)
+	if !ok {
+		return "", fmt.Errorf("AppPrivateKey not found in extra config")
+	}
+	privateKey, err := jwt.ParseECPrivateKeyFromPEM([]byte(keyContent))
 	if err != nil {
 		return "", fmt.Errorf("failed to parse Apple private key: %w", err)
 	}
 
+	teamID, _ := p.config.Extra["TeamID"].(string)
+	keyID, _ := p.config.Extra["KeyID"].(string)
+
 	claims := &jwt.RegisteredClaims{
-		Issuer:    p.config.Extra["TeamID"].(string),
+		Issuer:    teamID,
 		IssuedAt:  jwt.NewNumericDate(time.Now()),
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
 		Audience:  jwt.ClaimStrings{"https://appleid.apple.com"},
@@ -76,23 +78,28 @@ func (p *AppleProvider) generateAppleClientSecret() (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
-	token.Header["kid"] = p.config.Extra["KeyID"].(string)
+	token.Header["kid"] = keyID
 
 	return token.SignedString(privateKey)
 }
 
-func (p *AppleProvider) ExchangeCodeForToken(code string) (*oauth2.Token, error) {
+func (p *AppleProvider) ExchangeCodeForToken(ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
 	clientSecret, err := p.generateAppleClientSecret()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate Apple client secret: %w", err)
 	}
 
-	// Use the standard library to exchange, but provide the custom client secret
-	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, http.DefaultClient)
-	token, err := p.oauthConfig.Exchange(ctx, code, oauth2.SetAuthURLParam("client_secret", clientSecret))
+	// Add client_secret to options
+	exchangeOpts := append(opts, oauth2.SetAuthURLParam("client_secret", clientSecret))
+
+	// Ensure HTTP client is in context if not already
+	if ctx.Value(oauth2.HTTPClient) == nil {
+		ctx = context.WithValue(ctx, oauth2.HTTPClient, http.DefaultClient)
+	}
+
+	token, err := p.oauthConfig.Exchange(ctx, code, exchangeOpts...)
 
 	if err != nil {
-		// Try to parse Apple's specific error format
 		if e, ok := err.(*oauth2.RetrieveError); ok {
 			var appleErr struct {
 				Error string `json:"error"`
@@ -107,14 +114,12 @@ func (p *AppleProvider) ExchangeCodeForToken(code string) (*oauth2.Token, error)
 	return token, nil
 }
 
-func (p *AppleProvider) GetUserInfo(token *oauth2.Token) (*UserInfo, error) {
+func (p *AppleProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*types.UserInfo, error) {
 	idToken, ok := token.Extra("id_token").(string)
 	if !ok {
 		return nil, fmt.Errorf("apple id_token not found in token")
 	}
 
-	// The user info is inside the ID Token JWT. We just need to decode it.
-	// We don't need to verify the signature here because it came directly from Apple's server.
 	parts := strings.Split(idToken, ".")
 	if len(parts) < 2 {
 		return nil, fmt.Errorf("invalid id_token format")
@@ -126,22 +131,18 @@ func (p *AppleProvider) GetUserInfo(token *oauth2.Token) (*UserInfo, error) {
 	}
 
 	var claims struct {
-		Sub   string `json:"sub"` // The unique user ID
+		Sub   string `json:"sub"`
 		Email string `json:"email"`
-		// Name and other details might not be present on subsequent logins
 	}
 
 	if err := json.Unmarshal(payload, &claims); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal apple id_token claims: %w", err)
 	}
 
-	// Note: You would also get the user's name from the initial POST request to your callback,
-	// which is not part of this simplified interface.
-	return &UserInfo{
+	return &types.UserInfo{
 		Provider:       "apple",
 		ProviderUserID: claims.Sub,
 		Email:          claims.Email,
 		Name:           "", // Must be captured from the initial form post
-		AvatarURL:      "",
 	}, nil
 }

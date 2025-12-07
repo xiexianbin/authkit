@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package authkit
+package providers
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/facebook"
+
+	"go.xiexianbin.cn/authkit/types"
 )
 
 type FacebookProvider struct {
@@ -31,9 +32,9 @@ type FacebookProvider struct {
 	config *oauth2.Config
 }
 
-func NewFacebookProvider(cfg *OauthConfig) Provider {
+func NewFacebookProvider(cfg *types.OauthConfig) types.Provider {
 	return &FacebookProvider{
-		Name: FACEBOOK,
+		Name: types.FACEBOOK,
 		config: &oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,
@@ -44,20 +45,21 @@ func NewFacebookProvider(cfg *OauthConfig) Provider {
 	}
 }
 
-func (p *FacebookProvider) GetAuthURL(state string) string {
-	return p.config.AuthCodeURL(state)
+func (p *FacebookProvider) GetAuthURL(state string, opts ...oauth2.AuthCodeOption) string {
+	return p.config.AuthCodeURL(state, opts...)
 }
 
-func (p *FacebookProvider) ExchangeCodeForToken(code string) (*oauth2.Token, error) {
-	return p.config.Exchange(context.Background(), code)
+func (p *FacebookProvider) ExchangeCodeForToken(ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
+	return p.config.Exchange(ctx, code, opts...)
 }
 
-func (p *FacebookProvider) GetUserInfo(token *oauth2.Token) (*UserInfo, error) {
+func (p *FacebookProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*types.UserInfo, error) {
+	client := p.config.Client(ctx, token)
 	// Facebook requires specifying fields
 	fields := "id,name,email,picture.type(large)"
 	userInfoURL := fmt.Sprintf("https://graph.facebook.com/me?fields=%s&access_token=%s", fields, url.QueryEscape(token.AccessToken))
 
-	resp, err := http.Get(userInfoURL)
+	resp, err := client.Get(userInfoURL)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +85,7 @@ func (p *FacebookProvider) GetUserInfo(token *oauth2.Token) (*UserInfo, error) {
 		return nil, err
 	}
 
-	return &UserInfo{
+	return &types.UserInfo{
 		Provider:       "facebook",
 		ProviderUserID: fbUser.ID,
 		Email:          fbUser.Email,

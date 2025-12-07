@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package authkit
+package providers
 
 import (
 	"context"
@@ -22,6 +22,8 @@ import (
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
+
+	"go.xiexianbin.cn/authkit/types"
 )
 
 // GithubProvider https://github.com/login/oauth/.well-known/openid-configuration
@@ -31,9 +33,9 @@ type GithubProvider struct {
 }
 
 // NewGithubProvider 创建一个新的 GitHub Provider实例
-func NewGithubProvider(cfg *OauthConfig) Provider {
+func NewGithubProvider(cfg *types.OauthConfig) types.Provider {
 	return &GithubProvider{
-		Name: GITHUB,
+		Name: types.GITHUB,
 		config: &oauth2.Config{
 			ClientID:     cfg.ClientID,
 			ClientSecret: cfg.ClientSecret,
@@ -44,16 +46,16 @@ func NewGithubProvider(cfg *OauthConfig) Provider {
 	}
 }
 
-func (p *GithubProvider) GetAuthURL(state string) string {
-	return p.config.AuthCodeURL(state)
+func (p *GithubProvider) GetAuthURL(state string, opts ...oauth2.AuthCodeOption) string {
+	return p.config.AuthCodeURL(state, opts...)
 }
 
-func (p *GithubProvider) ExchangeCodeForToken(code string) (*oauth2.Token, error) {
-	return p.config.Exchange(context.Background(), code)
+func (p *GithubProvider) ExchangeCodeForToken(ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
+	return p.config.Exchange(ctx, code, opts...)
 }
 
-func (p *GithubProvider) GetUserInfo(token *oauth2.Token) (*UserInfo, error) {
-	client := p.config.Client(context.Background(), token)
+func (p *GithubProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*types.UserInfo, error) {
+	client := p.config.Client(ctx, token)
 	resp, err := client.Get("https://api.github.com/user")
 	if err != nil {
 		return nil, err
@@ -86,7 +88,7 @@ func (p *GithubProvider) GetUserInfo(token *oauth2.Token) (*UserInfo, error) {
 		githubUser.Name = githubUser.Login
 	}
 
-	return &UserInfo{
+	return &types.UserInfo{
 		Provider:       "github",
 		ProviderUserID: fmt.Sprintf("%d", githubUser.ID),
 		Email:          githubUser.Email,
