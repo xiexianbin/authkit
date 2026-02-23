@@ -1,16 +1,5 @@
-// Copyright 2025 xiexianbin<me@xiexianbin.cn>
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: hi@xiexianbin.cn
 
 package api
 
@@ -22,7 +11,7 @@ import (
 )
 
 func SetupRoutes(router *gin.Engine, db *gorm.DB) {
-	// 依赖注入
+	// Dependency injection
 	authService := services.NewAuthService(db)
 	authHandler := &AuthHandler{AuthService: authService}
 
@@ -32,13 +21,13 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB) {
 	{
 		oauthGroup := v1.Group("/oauth/:provider")
 		{
-			// 对应登录/注册流程的第1步
+			// Corresponds to Step 1 of the login/registration process
 			oauthGroup.GET("/login", authHandler.HandleOauthLoginRedirect)
 
-			// 对应绑定流程的第1步 (需要JWT认证中间件)
-			// oauthGroup.GET("/bind", middleware.JWTAuth(), authHandler.HandleOauthLoginRedirect)
+			// Corresponds to Step 1 of the binding process (requires JWT auth middleware)
+			oauthGroup.GET("/bind", JWTAuth(), authHandler.HandleOauthBindRedirect)
 
-			// 统一的回调处理
+			// Unified callback handling
 			oauthGroup.GET("/callback", authHandler.HandleOauthCallback)
 		}
 	}

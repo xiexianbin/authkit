@@ -31,7 +31,9 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
 	"go.xiexianbin.cn/authkit"
+	"go.xiexianbin.cn/authkit/providers"
 	"go.xiexianbin.cn/authkit/types"
 )
 
@@ -40,7 +42,12 @@ func init() {
 	config := &types.Config{
 		// ... 加载 headers mapstructure 等配置
 	}
-	authkit.InitFactory(config)
+
+	// 注册提供商
+	if config.Github.ClientID != "" {
+		authkit.RegisterProvider(types.GITHUB, providers.NewGithubProvider(&config.Github))
+	}
+	// ... 注册其他提供商
 }
 
 func main() {
@@ -57,7 +64,7 @@ func main() {
 
 		// 在生产环境中，应使用随机 state 进行 CSRF 保护
 		state := "random_state_string"
-		redirectURL := provider.GetAuthURL(state)
+		redirectURL := provider.GetAuthURL(c.Request.Context(), state)
 		c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 	})
 

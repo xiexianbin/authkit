@@ -8,6 +8,8 @@ import (
 )
 
 func main() {
+	api.InitProviders() // Initialize OAuth providers based on environment config
+
 	gin.SetMode(gin.DebugMode)
 	engine := gin.Default()
 	api.SetupRoutes(engine, database.DB)

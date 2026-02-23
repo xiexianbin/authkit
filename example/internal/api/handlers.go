@@ -1,20 +1,11 @@
-// Copyright 2025 xiexianbin<me@xiexianbin.cn>
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: hi@xiexianbin.cn
 
 package api
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
@@ -23,31 +14,88 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	"go.xiexianbin.cn/authkit"
+	"go.xiexianbin.cn/authkit/providers"
 	"go.xiexianbin.cn/authkit/types"
+	"golang.org/x/oauth2"
 
 	"example/internal/services"
 	"example/utils"
 )
 
-func init() {
+// AppConfig defines the application's configuration
+type AppConfig struct {
+	Alipay    types.OauthConfig
+	Apple     types.OauthConfig
+	Dingtalk  types.OauthConfig
+	Facebook  types.OauthConfig
+	Feishu    types.OauthConfig
+	Github    types.OauthConfig
+	Google    types.OauthConfig
+	Microsoft types.OauthConfig
+	QQ        types.OauthConfig
+	Twitter   types.OauthConfig
+	Wechat    types.OauthConfig
+}
+
+func InitProviders() {
 	var err error
-	err = godotenv.Load("/Users/xiexianbin/workspace/code/github.com/xiexianbin/authkit/example/.env")
+	err = godotenv.Load(".env")
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Println("No .env file found or error loading it, falling back to environment variables")
 	}
 
-	config := types.Config{}
+	config := AppConfig{}
 	err = envconfig.Process("", &config)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
 	log.Printf("%#v", config)
-	authkit.InitFactory(&config)
+
+	if config.Alipay.ClientID != "" {
+		authkit.RegisterProvider(types.ALIPAY, providers.NewAlipayProvider(&config.Alipay))
+	}
+	if config.Apple.ClientID != "" {
+		authkit.RegisterProvider(types.APPLE, providers.NewAppleProvider(&config.Apple))
+	}
+	if config.Dingtalk.ClientID != "" {
+		authkit.RegisterProvider(types.DINGTALK, providers.NewDingtalkProvider(&config.Dingtalk))
+	}
+	if config.Facebook.ClientID != "" {
+		authkit.RegisterProvider(types.FACEBOOK, providers.NewFacebookProvider(&config.Facebook))
+	}
+	if config.Feishu.ClientID != "" {
+		authkit.RegisterProvider(types.FEISHU, providers.NewFeishuProvider(&config.Feishu))
+	}
+	if config.Github.ClientID != "" {
+		authkit.RegisterProvider(types.GITHUB, providers.NewGithubProvider(&config.Github))
+	}
+	if config.Google.ClientID != "" {
+		authkit.RegisterProvider(types.GOOGLE, providers.NewGoogleProvider(&config.Google))
+	}
+	if config.Microsoft.ClientID != "" {
+		authkit.RegisterProvider(types.MICROSOFT, providers.NewMicrosoftProvider(&config.Microsoft))
+	}
+	if config.QQ.ClientID != "" {
+		authkit.RegisterProvider(types.QQ, providers.NewQQProvider(&config.QQ))
+	}
+	if config.Twitter.ClientID != "" {
+		authkit.RegisterProvider(types.TWITTER, providers.NewTwitterProvider(&config.Twitter))
+	}
+	if config.Wechat.ClientID != "" {
+		authkit.RegisterProvider(types.WECHAT, providers.NewWechatProvider(&config.Wechat))
+	}
 }
 
 type AuthHandler struct {
 	AuthService *services.AuthService
+}
+
+// generateCryptoRandomString generates a secure random string of length 32
+func generateCryptoRandomString() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b)
 }
 
 func (h *AuthHandler) Home(c *gin.Context) {
@@ -60,7 +108,7 @@ func (h *AuthHandler) Home(c *gin.Context) {
 	<h1>Welcome to AuthKit Example</h1>`
 
 	for _, name := range authkit.GetProviders() {
-		html += fmt.Sprintf("<a href=\"http://127.0.0.1:8080/api/v1/oauth/%s/login\">Login with %s</a><br/>", name, name)
+		html += fmt.Sprintf("<a href=\"/api/v1/oauth/%s/login\">Login with %s</a><br/>", name, name)
 	}
 
 	html += `</body>
@@ -68,7 +116,7 @@ func (h *AuthHandler) Home(c *gin.Context) {
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
 }
 
-// HandleOauthLoginRedirect 处理登录/绑定跳转
+// HandleOauthLoginRedirect handles login/binding redirection
 func (h *AuthHandler) HandleOauthLoginRedirect(c *gin.Context) {
 	providerName := c.Param("provider")
 	provider, err := authkit.GetProvider(providerName)
@@ -77,25 +125,59 @@ func (h *AuthHandler) HandleOauthLoginRedirect(c *gin.Context) {
 		return
 	}
 
-	// CSRF保护: 生成 state 并存入 cookie/session
-	state := "random_state_string" // 实际应使用随机生成器
-	c.SetCookie("oauth_state", state, 3600, "/", "localhost", false, true)
+	// CSRF protection: generate a random state and store it in a cookie
+	state := generateCryptoRandomString()
 
-	redirectURL := provider.GetAuthURL(state)
+	// The secure flag value is usually based on environment config, set to false for now in dev
+	c.SetCookie("oauth_state", state, 3600, "/", "", false, true)
+
+	// PKCE (Proof Key for Code Exchange)
+	codeVerifier := oauth2.GenerateVerifier()
+	c.SetCookie("oauth_code_verifier", codeVerifier, 3600, "/", "", false, true)
+
+	redirectURL := provider.GetAuthURL(c.Request.Context(), state, oauth2.S256ChallengeOption(codeVerifier))
 	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
-// HandleOauthCallback 处理回调
+// HandleOauthBindRedirect handles bind redirection for logged-in users
+func (h *AuthHandler) HandleOauthBindRedirect(c *gin.Context) {
+	providerName := c.Param("provider")
+	provider, err := authkit.GetProvider(providerName)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	state := generateCryptoRandomString()
+	// Prefix state with "bind_" to identify the action in the callback
+	state = "bind_" + state
+
+	c.SetCookie("oauth_state", state, 3600, "/", "", false, true)
+
+	codeVerifier := oauth2.GenerateVerifier()
+	c.SetCookie("oauth_code_verifier", codeVerifier, 3600, "/", "", false, true)
+
+	redirectURL := provider.GetAuthURL(c.Request.Context(), state, oauth2.S256ChallengeOption(codeVerifier))
+	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+}
+
+// HandleOauthCallback handles the callback
 func (h *AuthHandler) HandleOauthCallback(c *gin.Context) {
 	providerName := c.Param("provider")
 
-	// CSRF 校验
-	// log.Printf("%#v", c.Request.Cookies())
-	// state, _ := c.Cookie("oauth_state")
-	// if c.Query("state") != state {
-	// 	c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid state token"})
-	// 	return
-	// }
+	// CSRF validation
+	stateCookie, err := c.Cookie("oauth_state")
+	if err != nil || c.Query("state") != stateCookie {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid state token"})
+		return
+	}
+
+	// Read PKCE verifier from Cookie
+	codeVerifierCookie, err := c.Cookie("oauth_code_verifier")
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing code_verifier mapping"})
+		return
+	}
 
 	provider, err := authkit.GetProvider(providerName)
 	if err != nil {
@@ -104,7 +186,8 @@ func (h *AuthHandler) HandleOauthCallback(c *gin.Context) {
 	}
 
 	code := c.Query("code")
-	token, err := provider.ExchangeCodeForToken(c.Request.Context(), code)
+	// Pass VerifierOption to ExchangeCodeForToken
+	token, err := provider.ExchangeCodeForToken(c.Request.Context(), code, oauth2.VerifierOption(codeVerifierCookie))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to exchange token: " + err.Error()})
 		return
@@ -116,9 +199,47 @@ func (h *AuthHandler) HandleOauthCallback(c *gin.Context) {
 		return
 	}
 
-	// 检查是登录还是绑定流程
-	// (可以通过 state 参数、不同的回调 URL 或者检查是否存在 JWT 来区分)
-	// 这里简化为统一处理登录/注册
+	state := c.Query("state")
+	isBind := false
+	if len(state) > 5 && state[:5] == "bind_" {
+		isBind = true
+	}
+
+	if isBind {
+		// Read JWT token
+		authHeader := c.GetHeader("Authorization")
+		tokenString := ""
+		if authHeader != "" && len(authHeader) > 7 {
+			tokenString = authHeader[7:]
+		} else {
+			tokenStringVal, err := c.Cookie("jwt_token")
+			if err == nil {
+				tokenString = tokenStringVal
+			}
+		}
+
+		if tokenString == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: No token provided for binding"})
+			return
+		}
+
+		userID, err := utils.ParseJWT(tokenString)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: Invalid token for binding"})
+			return
+		}
+
+		err = h.AuthService.HandleOauthBind(userID, userInfo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to bind account: " + err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Binding successful",
+		})
+		return
+	}
 
 	user, err := h.AuthService.HandleOauthLoginOrRegister(userInfo)
 	if err != nil {
@@ -126,12 +247,15 @@ func (h *AuthHandler) HandleOauthCallback(c *gin.Context) {
 		return
 	}
 
-	// 登录成功，生成我们自己的 JWT
+	// Login successful, generate our own JWT
 	jwtToken, err := utils.GenerateJWT(user.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate JWT"})
 		return
 	}
+
+	// Optionally store it in cookie for web clients
+	c.SetCookie("jwt_token", jwtToken, 86400, "/", "", false, true)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",

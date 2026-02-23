@@ -31,7 +31,9 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
 	"go.xiexianbin.cn/authkit"
+	"go.xiexianbin.cn/authkit/providers"
 	"go.xiexianbin.cn/authkit/types"
 )
 
@@ -40,7 +42,12 @@ func init() {
 	config := &types.Config{
 		// ... load headers mapstructure or similar
 	}
-	authkit.InitFactory(config)
+
+	// Register providers
+	if config.Github.ClientID != "" {
+		authkit.RegisterProvider(types.GITHUB, providers.NewGithubProvider(&config.Github))
+	}
+	// ... register other providers
 }
 
 func main() {
@@ -57,7 +64,7 @@ func main() {
 
 		// In production, use a random state for CSRF protection
 		state := "random_state_string"
-		redirectURL := provider.GetAuthURL(state)
+		redirectURL := provider.GetAuthURL(c.Request.Context(), state)
 		c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 	})
 

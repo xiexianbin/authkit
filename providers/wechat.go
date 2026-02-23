@@ -1,16 +1,5 @@
-// Copyright 2025 xiexianbin<me@xiexianbin.cn>
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: hi@xiexianbin.cn
 
 package providers
 
@@ -20,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"golang.org/x/oauth2"
 
@@ -47,7 +37,7 @@ func NewWechatProvider(cfg *types.OauthConfig) types.Provider {
 	}
 }
 
-func (p *WechatProvider) GetAuthURL(state string, opts ...oauth2.AuthCodeOption) string {
+func (p *WechatProvider) GetAuthURL(ctx context.Context, state string, opts ...oauth2.AuthCodeOption) string {
 	// Wechat requires #wechat_redirect at the end
 	url := p.config.AuthCodeURL(state, opts...)
 	return url + "#wechat_redirect"
@@ -101,7 +91,7 @@ func (p *WechatProvider) ExchangeCodeForToken(ctx context.Context, code string, 
 		AccessToken:  tokenData.AccessToken,
 		RefreshToken: tokenData.RefreshToken,
 		// ExpiresIn is int seconds
-		// Expiry: time.Now().Add(time.Duration(tokenData.ExpiresIn) * time.Second),
+		Expiry: time.Now().Add(time.Duration(tokenData.ExpiresIn) * time.Second),
 	}
 	// Store openid/unionid in Extra
 	return token.WithExtra(map[string]interface{}{
@@ -157,9 +147,10 @@ func (p *WechatProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (
 	}
 
 	return &types.UserInfo{
-		Provider:       "wechat",
+		Provider:       types.WECHAT,
 		ProviderUserID: providerUserID,
 		Name:           wechatUser.Nickname,
 		AvatarURL:      wechatUser.HeadImgURL,
+		RawData:        wechatUser,
 	}, nil
 }

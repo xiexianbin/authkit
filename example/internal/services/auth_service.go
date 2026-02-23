@@ -1,20 +1,11 @@
-// Copyright 2025 xiexianbin<me@xiexianbin.cn>
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: hi@xiexianbin.cn
 
 package services
 
 import (
+	"fmt"
+
 	"go.xiexianbin.cn/authkit/types"
 	"gorm.io/gorm"
 
@@ -29,53 +20,75 @@ func NewAuthService(db *gorm.DB) *AuthService {
 	return &AuthService{DB: db}
 }
 
-// HandleOauthLoginOrRegister 处理 OAuth 回调后的核心逻辑
+// HandleOauthLoginOrRegister handles the core logic after OAuth callback
 func (s *AuthService) HandleOauthLoginOrRegister(userInfo *types.UserInfo) (*models.User, error) {
 	var oauthAccount models.OauthAccount
 
-	// 1. 检查第三方账号是否已存在
+	// 1. Check if the third-party account already exists
 	err := s.DB.Preload("User").Where("provider = ? AND provider_user_id = ?", userInfo.Provider, userInfo.ProviderUserID).First(&oauthAccount).Error
 	if err == nil {
-		// 已存在，直接返回关联的本地用户
+		// Exists, return the associated local user directly
 		return &oauthAccount.User, nil
 	}
 
 	if err != gorm.ErrRecordNotFound {
-		return nil, err // 其他数据库错误
+		return nil, err // Other database errors
 	}
 
-	// 事务处理，确保数据一致性
+	// Transaction processing to ensure data consistency
 	tx := s.DB.Begin()
 
-	// 2. 第三方账号不存在，检查 email 是否已注册
+	// 2. Third-party account does not exist, check if email is registered
 	var user models.User
-	err = tx.Where("email = ?", userInfo.Email).First(&user).Error
+	var emailErr error
 
-	if err == nil {
-		// Email 已存在，为该用户绑定新的 Oauth 账号
-		// (在这里创建 oauthAccount 记录并关联到 user.ID)
-	} else if err == gorm.ErrRecordNotFound {
-		// 3. 全新用户，创建本地用户和 Oauth 账号
+	if userInfo.Email != "" {
+		emailErr = tx.Where("email = ?", userInfo.Email).First(&user).Error
+	} else {
+		// If email is empty, we force the flow to create a brand new user
+		emailErr = gorm.ErrRecordNotFound
+	}
+
+	if emailErr == nil {
+		// Email exists, bind a new OAuth account for the user
+		// (Create oauthAccount record here and associate it with user.ID)
+	} else if emailErr == gorm.ErrRecordNotFound {
+		// 3. Brand new user, create local user and OAuth account
+
+		// Ensure we have a valid username fallback if empty
+		username := userInfo.Name
+		if username == "" {
+			username = "oauthUser_" + userInfo.ProviderUserID[:min(8, len(userInfo.ProviderUserID))]
+		}
+
 		user = models.User{
-			Username: userInfo.Name, // Or generate a unique one
+			Username: username,
 			Email:    userInfo.Email,
 			Avatar:   userInfo.AvatarURL,
 		}
-		if err := tx.Create(&user).Error; err != nil {
-			tx.Rollback()
-			return nil, err
+
+		// Ensure username is unique, though practically a better approach is to append a random string if error
+		// Simple fallback:
+		err = tx.Create(&user).Error
+		if err != nil {
+			// If unique constraint fails, try appending the provider userId
+			user.Username = username + "_" + userInfo.ProviderUserID[:min(4, len(userInfo.ProviderUserID))]
+			if errRetry := tx.Create(&user).Error; errRetry != nil {
+				tx.Rollback()
+				return nil, errRetry
+			}
 		}
 	} else {
 		tx.Rollback()
-		return nil, err // 其他数据库错误
+		return nil, emailErr // Other database errors
 	}
 
-	// 为 user 创建新的 oauthAccount
+	// Create a new oauthAccount for the user
 	newOauthAccount := models.OauthAccount{
 		UserID:         user.ID,
 		Provider:       userInfo.Provider,
 		ProviderUserID: userInfo.ProviderUserID,
-		// 可选：存储 token
+		// Optional: store token
 	}
 
 	if err := tx.Create(&newOauthAccount).Error; err != nil {
@@ -87,7 +100,47 @@ func (s *AuthService) HandleOauthLoginOrRegister(userInfo *types.UserInfo) (*mod
 		return nil, err
 	}
 
-	// 返回新创建或找到的用户信息
+	// Return the newly created or found user info
 	user.OauthAccounts = append(user.OauthAccounts, newOauthAccount)
 	return &user, nil
+}
+
+// HandleOauthBind specifically handles binding a new OAuth info to an existing User
+func (s *AuthService) HandleOauthBind(userID uint, userInfo *types.UserInfo) error {
+	var oauthAccount models.OauthAccount
+
+	// Check if this specific oauth provider record already exists globally
+	err := s.DB.Where("provider = ? AND provider_user_id = ?", userInfo.Provider, userInfo.ProviderUserID).First(&oauthAccount).Error
+	if err == nil {
+		if oauthAccount.UserID == userID {
+			// Already bound to themselves, valid no-op
+			return nil
+		}
+		// Bound to someone else
+		return gorm.ErrInvalidData
+	}
+
+	if err != gorm.ErrRecordNotFound {
+		return err // Other database errors
+	}
+
+	// Important security check: Does the user already have this provider bound?
+	// E.g., a user shouldn't bind 2 github accounts
+	var existingBinding models.OauthAccount
+	err = s.DB.Where("user_id = ? AND provider = ?", userID, userInfo.Provider).First(&existingBinding).Error
+	if err == nil {
+		// User already bounds an account from this provider
+		return fmt.Errorf("user already has a %s account bound", userInfo.Provider)
+	}
+	if err != gorm.ErrRecordNotFound {
+		return err
+	}
+
+	newOauthAccount := models.OauthAccount{
+		UserID:         userID,
+		Provider:       userInfo.Provider,
+		ProviderUserID: userInfo.ProviderUserID,
+	}
+
+	return s.DB.Create(&newOauthAccount).Error
 }

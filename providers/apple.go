@@ -1,28 +1,16 @@
-// Copyright 2025 xiexianbin<me@xiexianbin.cn>
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: hi@xiexianbin.cn
 
 package providers
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/oauth2"
 
@@ -51,7 +39,7 @@ func NewAppleProvider(cfg *types.OauthConfig) types.Provider {
 	}
 }
 
-func (p *AppleProvider) GetAuthURL(state string, opts ...oauth2.AuthCodeOption) string {
+func (p *AppleProvider) GetAuthURL(ctx context.Context, state string, opts ...oauth2.AuthCodeOption) string {
 	authOpts := append(opts, oauth2.SetAuthURLParam("response_mode", "form_post"))
 	return p.oauthConfig.AuthCodeURL(state, authOpts...)
 }
@@ -115,19 +103,23 @@ func (p *AppleProvider) ExchangeCodeForToken(ctx context.Context, code string, o
 }
 
 func (p *AppleProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*types.UserInfo, error) {
-	idToken, ok := token.Extra("id_token").(string)
+	idTokenStr, ok := token.Extra("id_token").(string)
 	if !ok {
 		return nil, fmt.Errorf("apple id_token not found in token")
 	}
 
-	parts := strings.Split(idToken, ".")
-	if len(parts) < 2 {
-		return nil, fmt.Errorf("invalid id_token format")
+	provider, err := oidc.NewProvider(ctx, "https://appleid.apple.com")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get apple oidc provider: %w", err)
 	}
 
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	verifier := provider.Verifier(&oidc.Config{
+		ClientID: p.config.ClientID,
+	})
+
+	idToken, err := verifier.Verify(ctx, idTokenStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode apple id_token payload: %w", err)
+		return nil, fmt.Errorf("failed to verify apple id_token: %w", err)
 	}
 
 	var claims struct {
@@ -135,14 +127,20 @@ func (p *AppleProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*
 		Email string `json:"email"`
 	}
 
-	if err := json.Unmarshal(payload, &claims); err != nil {
+	if err := idToken.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal apple id_token claims: %w", err)
 	}
 
+	var rawData map[string]interface{}
+	if err := idToken.Claims(&rawData); err != nil {
+		rawData = make(map[string]interface{})
+	}
+
 	return &types.UserInfo{
-		Provider:       "apple",
+		Provider:       types.APPLE,
 		ProviderUserID: claims.Sub,
 		Email:          claims.Email,
 		Name:           "", // Must be captured from the initial form post
+		RawData:        rawData,
 	}, nil
 }

@@ -1,16 +1,5 @@
-// Copyright 2025 xiexianbin<me@xiexianbin.cn>
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: hi@xiexianbin.cn
 
 package providers
 
@@ -28,12 +17,12 @@ import (
 	"go.xiexianbin.cn/authkit/types"
 )
 
-// QQ 的流程也有些非标准，尤其是在获取 `openid` 的步骤。
+// QQ's flow is somewhat non-standard, especially the step to get `openid`.
 //
-// **关键点**:
-// * 获取 `access_token` 后，需要额外调用一个接口获取 `openid`。
-// * `openid` 返回的格式是 `callback( {"client_id":"...","openid":"..."} );`，需要特殊处理。
-// * 同样，`UnionID` 是打通腾讯生态的关键。
+// **Key points**:
+// * After getting the `access_token`, an additional API call is required to get the `openid`.
+// * The `openid` response format is `callback( {"client_id":"...","openid":"..."} );`, which needs special handling.
+// * Similarly, `UnionID` is the key to synchronizing with the Tencent ecosystem.
 
 type QQProvider struct {
 	Name   string
@@ -56,13 +45,13 @@ func NewQQProvider(cfg *types.OauthConfig) types.Provider {
 	}
 }
 
-func (p *QQProvider) GetAuthURL(state string, opts ...oauth2.AuthCodeOption) string {
+func (p *QQProvider) GetAuthURL(ctx context.Context, state string, opts ...oauth2.AuthCodeOption) string {
 	return p.config.AuthCodeURL(state, opts...)
 }
 
 func (p *QQProvider) ExchangeCodeForToken(ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
-	// QQ 的 token 返回是 text/plain, 类似 access_token=...&expires_in=...
-	// 标准库的 Exchange 会失败，需要手动请求
+	// QQ's token response is text/plain, like access_token=...&expires_in=...
+	// The standard library's Exchange will fail, so a manual request is required.
 	// The standard oauth2.Config.Exchange method expects a JSON response.
 	// QQ's token endpoint returns a URL-encoded string.
 	// Therefore, we need to manually perform the exchange for QQ.
@@ -101,7 +90,7 @@ func (p *QQProvider) ExchangeCodeForToken(ctx context.Context, code string, opts
 	return token, nil
 }
 
-// getOpenID 是 QQ 特有的步骤
+// getOpenID is a QQ specific step
 func (p *QQProvider) getOpenID(accessToken string) (string, string, error) {
 	openidURL := fmt.Sprintf("https://graph.qq.com/oauth2.0/me?access_token=%s&unionid=1", accessToken)
 	resp, err := http.Get(openidURL)
@@ -115,7 +104,7 @@ func (p *QQProvider) getOpenID(accessToken string) (string, string, error) {
 		return "", "", err
 	}
 
-	// 返回格式: callback( {"client_id":"...","openid":"...","unionid":"..."} );
+	// Response format: callback( {"client_id":"...","openid":"...","unionid":"..."} );
 	s := strings.Trim(string(body), "callback( );\n\r")
 
 	var data struct {
@@ -173,7 +162,7 @@ func (p *QQProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*typ
 		return nil, fmt.Errorf("qq get user info error: %s", qqUser.Msg)
 	}
 
-	// 优先使用 UnionID
+	// Prioritize using UnionID
 	providerUserID := unionid
 	if providerUserID == "" {
 		providerUserID = openid
@@ -184,6 +173,7 @@ func (p *QQProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*typ
 		ProviderUserID: providerUserID,
 		Name:           qqUser.Nickname,
 		AvatarURL:      qqUser.Avatar,
-		Email:          "", // QQ 不提供邮箱
+		Email:          "", // QQ does not provide email
+		RawData:        qqUser,
 	}, nil
 }

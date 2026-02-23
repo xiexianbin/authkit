@@ -1,22 +1,12 @@
-// Copyright 2025 xiexianbin<me@xiexianbin.cn>
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: hi@xiexianbin.cn
 
 package providers
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 
 	"golang.org/x/oauth2"
@@ -44,7 +34,7 @@ func NewGoogleProvider(cfg *types.OauthConfig) types.Provider {
 	}
 }
 
-func (p *GoogleProvider) GetAuthURL(state string, opts ...oauth2.AuthCodeOption) string {
+func (p *GoogleProvider) GetAuthURL(ctx context.Context, state string, opts ...oauth2.AuthCodeOption) string {
 	return p.config.AuthCodeURL(state, opts...)
 }
 
@@ -66,21 +56,27 @@ func (p *GoogleProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (
 	}
 
 	var googleUser struct {
-		ID      string `json:"id"`
-		Email   string `json:"email"`
-		Name    string `json:"name"`
-		Picture string `json:"picture"`
+		ID            string `json:"id"`
+		Email         string `json:"email"`
+		VerifiedEmail bool   `json:"verified_email"`
+		Name          string `json:"name"`
+		Picture       string `json:"picture"`
 	}
 
 	if err := json.Unmarshal(body, &googleUser); err != nil {
 		return nil, err
 	}
 
+	if googleUser.Email != "" && !googleUser.VerifiedEmail {
+		return nil, fmt.Errorf("google email is not verified")
+	}
+
 	return &types.UserInfo{
-		Provider:       "google",
+		Provider:       types.GOOGLE,
 		ProviderUserID: googleUser.ID,
 		Email:          googleUser.Email,
 		Name:           googleUser.Name,
 		AvatarURL:      googleUser.Picture,
+		RawData:        googleUser,
 	}, nil
 }
