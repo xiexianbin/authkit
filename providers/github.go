@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
@@ -47,13 +48,17 @@ func (p *GithubProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (
 	client := p.config.Client(ctx, token)
 	resp, err := client.Get("https://api.github.com/user")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get user info: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var githubUser struct {
@@ -65,7 +70,7 @@ func (p *GithubProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (
 	}
 
 	if err := json.Unmarshal(body, &githubUser); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal GitHub user: %w (response: %s)", err, string(body))
 	}
 
 	// If the main API does not return an email, try fetching from /user/emails
